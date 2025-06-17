@@ -1,0 +1,96 @@
+-- Crear tabla para asesores
+CREATE TABLE IF NOT EXISTS asesores (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Crear tabla para datos NPS
+CREATE TABLE IF NOT EXISTS nps_data (
+    id SERIAL PRIMARY KEY,
+    month VARCHAR(7) NOT NULL, -- Formato YYYY-MM
+    asesor VARCHAR(100) NOT NULL,
+    scores INTEGER[] NOT NULL, -- Array de 11 enteros (puntuaciones 0-10)
+    comentarios JSONB NOT NULL, -- JSON con estructura de comentarios
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(month, asesor) -- Un registro por asesor por mes
+);
+
+-- Crear índices para mejorar performance
+CREATE INDEX IF NOT EXISTS idx_nps_data_month ON nps_data(month);
+CREATE INDEX IF NOT EXISTS idx_nps_data_asesor ON nps_data(asesor);
+CREATE INDEX IF NOT EXISTS idx_nps_data_month_asesor ON nps_data(month, asesor);
+
+-- Insertar asesores iniciales
+INSERT INTO asesores (name) VALUES 
+    ('Abidam'),
+    ('Diego'),
+    ('Angel'),
+    ('Leo'),
+    ('Lupita'),
+    ('Noé')
+ON CONFLICT (name) DO NOTHING;
+
+-- Insertar datos de ejemplo
+INSERT INTO nps_data (month, asesor, scores, comentarios) VALUES 
+    ('2024-01', 'Abidam', ARRAY[2,3,3,0,0,2,1,14,35,47,20], '{
+        "positivos": 15,
+        "neutros": 8,
+        "negativos": 4,
+        "categorias": {
+            "precio": 3,
+            "entrega": 8,
+            "trato": 12,
+            "inventario": 2,
+            "otros": 2
+        }
+    }'),
+    ('2024-01', 'Leo', ARRAY[0,0,2,0,0,0,6,7,20,15,5], '{
+        "positivos": 8,
+        "neutros": 5,
+        "negativos": 7,
+        "categorias": {
+            "precio": 5,
+            "entrega": 4,
+            "trato": 6,
+            "inventario": 3,
+            "otros": 2
+        }
+    }'),
+    ('2024-01', 'Lupita', ARRAY[0,1,0,0,3,0,0,0,0,0,0], '{
+        "positivos": 1,
+        "neutros": 1,
+        "negativos": 2,
+        "categorias": {
+            "precio": 2,
+            "entrega": 1,
+            "trato": 1,
+            "inventario": 0,
+            "otros": 0
+        }
+    }')
+ON CONFLICT (month, asesor) DO NOTHING;
+
+-- Función para actualizar updated_at automáticamente
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger para actualizar updated_at
+CREATE TRIGGER update_nps_data_updated_at 
+    BEFORE UPDATE ON nps_data 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Políticas de seguridad RLS (Row Level Security)
+ALTER TABLE asesores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nps_data ENABLE ROW LEVEL SECURITY;
+
+-- Política para permitir todas las operaciones (puedes restringir según necesites)
+CREATE POLICY "Allow all operations" ON asesores FOR ALL USING (true);
+CREATE POLICY "Allow all operations" ON nps_data FOR ALL USING (true);
